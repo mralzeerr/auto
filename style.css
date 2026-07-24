@@ -228,16 +228,18 @@ html, body {
   vertical-align: bottom;
 }
 #musicFrameWrap { flex: 1; min-height: 0; }
-#musicFrameWrap iframe, #musicFrameWrap > div { width: 100%; height: 100%; border: 0; display: block; }
+/* ملاحظة: بدون display هنا — كل محتوى (شبكة البطاقات/الكاميرات/الراديو) له نظام عرضه الخاص */
+#musicFrameWrap iframe, #musicFrameWrap > div { width: 100%; height: 100%; border: 0; }
+#musicFrameWrap iframe { display: block; }
 .music-loading { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
 
 /* مركز التواصل الاجتماعي */
 .social-grid {
   width: 100%; height: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   overflow-y: auto;
   align-content: center;
   scrollbar-width: thin;
@@ -271,7 +273,7 @@ html, body {
 .s-sc { background: linear-gradient(145deg, #fffc00, #f5d800); box-shadow: 0 6px 22px rgba(255,252,0,0.3); color: #1a1a1a; }
 
 /* الراديو */
-.radio-box { width: 100%; height: 100%; display: flex; flex-direction: column; }
+.radio-box { width: 100%; height: 100%; display: flex !important; flex-direction: column; }
 .radio-now {
   padding: 12px 16px;
   font-weight: 700;
@@ -315,7 +317,7 @@ html, body {
 /* شبكة الكاميرات */
 .cam-grid {
   width: 100%; height: 100%;
-  display: grid;
+  display: grid !important;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
   background: #000;
