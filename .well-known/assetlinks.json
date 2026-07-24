@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.alzeerr.car",
+        "sha256_cert_fingerprints": ["16:D2:2E:F0:D1:AE:6E:03:FD:49:75:2C:E1:7C:F8:09:CA:69:6D:13:8D:85:EA:9D:A4:76:D2:20:60:25:D9:B7"]
+      }
+    }]
