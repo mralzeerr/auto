@@ -252,6 +252,15 @@ async function handleInput(text) {
     return reply("تم، رجعت العرض للحجم العادي.");
   }
 
+  // ---- الكاميرات ----
+  if (/(كاميرا|الكاميرات|كامرة|كامره)/.test(t)) {
+    if (/(وقف|أوقف|اوقف|سكر|اقفل|اغلق|أغلق)/.test(t)) return stopMusic();
+    if (/(360|٣٦٠|ثلاثمية وستين|ثلاث مية وستين|محيطي|شامل)/.test(t)) return doCamera("360");
+    if (/(أمامية|امامية|الأمامية|الامامية|الأمام|الامام|جدام|قدام)/.test(t)) return doCamera("front");
+    if (/(خلفية|الخلفية|خلف|الخلف|ورا|وراء)/.test(t)) return doCamera("rear");
+    if (/(شغل|شغّل|افتح|ورني|وريني|عرض|اعرض|شوف|شيك)/.test(t)) return doCamera("rear");
+  }
+
   // ---- الأفلام والفيديو والأخبار ----
   const wv = "(?:شغل|شغّل|عرض|اعرض|ورني|وريني|افتح|حط|ابا اشوف|أبا أشوف|ابي اشوف|ابغى اشوف|بغيت اشوف)";
   const movieMatch = t.match(new RegExp(wv + "\\s*(?:لي\\s+)?(?:فلم|فيلم|الفلم|الفيلم|افلام|أفلام)\\s*(.*)"));
@@ -620,6 +629,7 @@ async function doVideo(query, opts = {}) {
 
 async function playMedia(query, opts = {}) {
   const mode = opts.mode || "music";
+  stopCameras();
   const shouldResetSize = ui.musicPanel.classList.contains("hidden") || mode !== mediaMode;
   mediaMode = mode;
   currentMusicQuery = query;
@@ -763,12 +773,13 @@ function destroyYtPlayer() {
 
 function stopMusic() {
   destroyYtPlayer();
+  stopCameras();
   ytQueue = [];
   ytPlayed = [];
   mediaFullscreen(false);
   ui.musicFrameWrap.innerHTML = "";
   ui.musicPanel.classList.add("hidden");
-  reply(mediaMode === "music" ? "⏹ وقفت لك الموسيقى." : "⏹ وقفت لك العرض.");
+  reply(mediaMode === "music" ? "⏹ وقفت لك الموسيقى." : mediaMode === "camera" ? "⏹ سكرت لك الكاميرا." : "⏹ وقفت لك العرض.");
 }
 ui.closeMusicBtn.addEventListener("click", stopMusic);
 $("openYtBtn").addEventListener("click", () => {
@@ -865,6 +876,106 @@ document.addEventListener("fullscreenchange", () => {
   });
 })();
 
+// ---------- الكاميرات (كاميرات الجهاز + USB) ----------
+let camStreams = [];
+
+function stopCameras() {
+  camStreams.forEach(s => { try { s.getTracks().forEach(tr => tr.stop()); } catch (_) {} });
+  camStreams = [];
+}
+
+async function listCams() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter(d => d.kind === "videoinput");
+}
+
+function camCell(stream, label, mirror) {
+  const cell = document.createElement("div");
+  cell.className = "cam-cell";
+  const v = document.createElement("video");
+  v.autoplay = true; v.playsInline = true; v.muted = true;
+  v.srcObject = stream;
+  if (mirror) v.style.transform = "scaleX(-1)"; // الأمامية معكوسة مثل المرايا — أريح للعين
+  const tag = document.createElement("span");
+  tag.className = "cam-label";
+  tag.textContent = label;
+  cell.appendChild(v); cell.appendChild(tag);
+  return cell;
+}
+
+async function doCamera(view) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return reply("⚠️ هالجهاز أو المتصفح ما يدعم الكاميرات.");
+  }
+  destroyYtPlayer();
+  stopCameras();
+  ytQueue = []; ytPlayed = [];
+  const shouldResetSize = ui.musicPanel.classList.contains("hidden") || mediaMode !== "camera";
+  mediaMode = "camera";
+  const titles = { front: "الكاميرا الأمامية", rear: "الكاميرا الخلفية", "360": "عرض 360 — كل الكاميرات" };
+  ui.mediaIcon.textContent = "📷";
+  ui.musicTitle.textContent = titles[view] || "الكاميرا";
+  if (shouldResetSize) resetMediaGeometry("video");
+  ui.musicPanel.classList.remove("hidden");
+  ui.musicFrameWrap.innerHTML = '<div class="music-loading">📷 أشغل لك الكاميرا…</div>';
+
+  try {
+    if (view === "360") {
+      // إذن مبدئي عشان تظهر أسماء الكاميرات، بعدين نعرضها كلها في شبكة وحدة
+      const initial = await navigator.mediaDevices.getUserMedia({ video: true });
+      const cams = await listCams();
+      initial.getTracks().forEach(tr => tr.stop());
+      if (!cams.length) throw new Error("no-cam");
+
+      const grid = document.createElement("div");
+      grid.className = "cam-grid" + (cams.length === 1 ? " one" : "");
+      ui.musicFrameWrap.innerHTML = "";
+      ui.musicFrameWrap.appendChild(grid);
+
+      let ok = 0;
+      for (let i = 0; i < cams.length && i < 4; i++) {
+        try {
+          const s = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: cams[i].deviceId } } });
+          camStreams.push(s);
+          grid.appendChild(camCell(s, cams[i].label || "كاميرا " + (i + 1), false));
+          ok++;
+        } catch (_) {}
+      }
+      if (!ok) throw new Error("no-cam");
+      if (ok === 1) reply("📷 عرض 360 الكامل يحتاج أكثر من كاميرا موصولة — حاليًا في كاميرا وحدة فعرضتها لك. وصّل كاميرات USB إضافية (وحدة للخلف ووحدة للأمام) وبجمعها لك كلها في شاشة وحدة.", { speech: "حاليًا في كاميرا وحدة بس، وصل كاميرات زيادة وبجمعها لك كلها" });
+      else reply(`📷 عرض 360 — ${ok} كاميرات شغالة مع بعض. قول «ملء الشاشة» إذا تبا أكبرها.`, { speech: "هذا عرض كل الكاميرات مع بعض" });
+    } else {
+      const facing = view === "front" ? "user" : "environment";
+      const initial = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
+      const cams = await listCams();
+      // نحاول نطابق الكاميرا المطلوبة بالاسم — وإلا بالترتيب
+      const wantRe = view === "front" ? /front|user|face|أمام/i : /back|rear|environment|خلف/i;
+      let target = cams.find(c => wantRe.test(c.label || ""));
+      if (!target && cams.length > 1) target = view === "front" ? cams[0] : cams[cams.length - 1];
+      let stream = initial;
+      const currentId = (initial.getVideoTracks()[0].getSettings() || {}).deviceId;
+      if (target && currentId && target.deviceId !== currentId) {
+        initial.getTracks().forEach(tr => tr.stop());
+        stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: target.deviceId } } });
+      }
+      camStreams.push(stream);
+      ui.musicFrameWrap.innerHTML = "";
+      const wrap = document.createElement("div");
+      wrap.className = "cam-grid one";
+      wrap.appendChild(camCell(stream, titles[view], view === "front"));
+      ui.musicFrameWrap.appendChild(wrap);
+      reply(view === "front" ? "📷 شغلت لك الكاميرا الأمامية." : "📷 شغلت لك الكاميرا الخلفية.", { speech: view === "front" ? "شغلت لك الكاميرا الأمامية" : "شغلت لك الكاميرا الخلفية" });
+    }
+  } catch (err) {
+    stopCameras();
+    ui.musicFrameWrap.innerHTML = "";
+    ui.musicPanel.classList.add("hidden");
+    if (err && (err.name === "NotAllowedError" || err.name === "SecurityError")) reply("⚠️ لازم تسمح باستخدام الكاميرا من المتصفح عشان أعرضها لك.");
+    else if ((err && err.name === "NotFoundError") || (err && err.message === "no-cam")) reply("⚠️ ما لقيت أي كاميرا موصولة بهالجهاز.");
+    else reply("⚠️ ما قدرت أشغل الكاميرا" + (err && err.name ? " (" + err.name + ")" : "") + ".");
+  }
+}
+
 // ---------- الموقع الحالي ----------
 async function doWhereAmI() {
   try {
@@ -903,7 +1014,7 @@ async function askClaude(text) {
 معلومات حالية: موقع السيارة تقريبًا (خط عرض ${state.pos.lat.toFixed(3)}، خط طول ${state.pos.lng.toFixed(3)}).${state.dest ? ` الوجهة الحالية: ${state.dest.name}.` : ""}${state.weatherCache ? ` الحرارة الآن ${Math.round(state.weatherCache.temperature_2m)} درجة.` : ""}
 إذا طلب المستخدم فعلًا يمكن للتطبيق تنفيذه، أضف في نهاية ردك سطرًا منفصلًا بهذا الشكل بالضبط:
 [CMD]{"action":"navigate","query":"اسم المكان"}
-الأفعال المتاحة: navigate (الذهاب لمكان)، music (تشغيل أغنية، مع query)، video (عرض فيلم أو فيديو أو أي محتوى مرئي، مع query)، news (أخبار مباشرة)، stop_music (إيقاف أي تشغيل أو عرض)، fullscreen (ملء الشاشة)، unfullscreen (تصغير العرض)، drive (بدء القيادة الذاتية)، stop (إيقافها)، weather، traffic، cancel_route.
+الأفعال المتاحة: navigate (الذهاب لمكان)، music (تشغيل أغنية، مع query)، video (عرض فيلم أو فيديو أو أي محتوى مرئي، مع query)، news (أخبار مباشرة)، camera (عرض كاميرا الجهاز، مع view: front أو rear أو 360)، stop_music (إيقاف أي تشغيل أو عرض)، fullscreen (ملء الشاشة)، unfullscreen (تصغير العرض)، drive (بدء القيادة الذاتية)، stop (إيقافها)، weather، traffic، cancel_route.
 لا تدّعِ أنك تتحكم بالسيارة الحقيقية — القيادة الذاتية هنا محاكاة على الخريطة.`;
 
   try {
@@ -956,6 +1067,7 @@ function runClaudeCmd(cmd) {
     case "music": doMusic(cmd.query || "موسيقى هادئة"); break;
     case "video": doVideo(cmd.query || "مقاطع منوعة"); break;
     case "news": doVideo("أخبار بث مباشر", { live: true }); break;
+    case "camera": doCamera(cmd.view === "front" ? "front" : cmd.view === "360" ? "360" : "rear"); break;
     case "fullscreen": mediaFullscreen(true); break;
     case "unfullscreen": mediaFullscreen(false); break;
     case "stop_music": stopMusic(); break;

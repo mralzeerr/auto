@@ -231,6 +231,31 @@ html, body {
 #musicFrameWrap iframe, #musicFrameWrap > div { width: 100%; height: 100%; border: 0; display: block; }
 .music-loading { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
 
+/* شبكة الكاميرات */
+.cam-grid {
+  width: 100%; height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: #000;
+}
+.cam-grid.one { grid-template-columns: 1fr; }
+.cam-cell { position: relative; overflow: hidden; background: #000; }
+.cam-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam-label {
+  position: absolute;
+  top: 6px; right: 8px;
+  background: rgba(0,0,0,0.55);
+  color: var(--text);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  max-width: 90%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* مقبض تغيير الحجم — الركن السفلي الأيسر */
 #mediaResize {
   position: absolute;
