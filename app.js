@@ -296,6 +296,19 @@ async function handleInput(text) {
     return reply("تم، رجعت العرض للحجم العادي.");
   }
 
+  // ---- الراديو والإذاعات ----
+  if (/(راديو|الراديو|إذاعة|اذاعة|الإذاعة|الاذاعة|إذاعات|اذاعات|الإذاعات|الاذاعات|محطة|المحطة|محطات)/.test(t)) {
+    if (/(وقف|أوقف|اوقف|سكر|اقفل)/.test(t)) return stopMusic();
+    if (/(غير|بدل|الثانية|التالية|اللي بعدها|عقب)/.test(t) && mediaMode === "radio" && radioStations.length) {
+      radioTryCount = 0;
+      playRadioStation(radioIdx + 1);
+      return;
+    }
+    const rm = t.match(/(?:راديو|الراديو|إذاعة|اذاعة|الإذاعة|الاذاعة|محطة|المحطة)\s*(.*)/);
+    const rq = rm && rm[1] ? rm[1].trim() : "";
+    if (/(شغل|شغّل|افتح|حط|ابا اسمع|أبا أسمع|ابي اسمع|ابغى اسمع|بغيت اسمع|سمعني|اسمعني)/.test(t) || !rq) return doRadio(rq);
+  }
+
   // ---- الكاميرات ----
   if (/(كاميرا|الكاميرات|كامرة|كامره)/.test(t)) {
     if (/(وقف|أوقف|اوقف|سكر|اقفل|اغلق|أغلق)/.test(t)) return stopMusic();
@@ -659,7 +672,7 @@ function loadYtApi() {
   return ytApiPromise;
 }
 
-const MEDIA_ICONS = { music: "🎵", video: "🎬", news: "📺" };
+const MEDIA_ICONS = { music: "🎵", video: "🎬", news: "📺", radio: "📻" };
 let mediaMode = "music";
 
 async function doMusic(query, quiet) {
@@ -674,6 +687,7 @@ async function doVideo(query, opts = {}) {
 async function playMedia(query, opts = {}) {
   const mode = opts.mode || "music";
   stopCameras();
+  stopRadio();
   const shouldResetSize = ui.musicPanel.classList.contains("hidden") || mode !== mediaMode;
   mediaMode = mode;
   currentMusicQuery = query;
@@ -818,12 +832,13 @@ function destroyYtPlayer() {
 function stopMusic() {
   destroyYtPlayer();
   stopCameras();
+  stopRadio();
   ytQueue = [];
   ytPlayed = [];
   mediaFullscreen(false);
   ui.musicFrameWrap.innerHTML = "";
   ui.musicPanel.classList.add("hidden");
-  reply(mediaMode === "music" ? "⏹ وقفت لك الموسيقى." : mediaMode === "camera" ? "⏹ سكرت لك الكاميرا." : "⏹ وقفت لك العرض.");
+  reply(mediaMode === "music" ? "⏹ وقفت لك الموسيقى." : mediaMode === "camera" ? "⏹ سكرت لك الكاميرا." : mediaMode === "radio" ? "⏹ وقفت لك الراديو." : "⏹ وقفت لك العرض.");
 }
 ui.closeMusicBtn.addEventListener("click", stopMusic);
 $("openYtBtn").addEventListener("click", () => {
@@ -920,6 +935,148 @@ document.addEventListener("fullscreenchange", () => {
   });
 })();
 
+// ---------- الراديو والإذاعات ----------
+let radioStations = [];
+let radioIdx = 0;
+let radioTryCount = 0;
+let radioAdvancing = false;
+const radioAudio = new Audio();
+radioAudio.addEventListener("error", () => {
+  if (mediaMode === "radio" && radioAudio.getAttribute("src")) radioFail();
+});
+
+let radioHls = null;
+let hlsLibPromise = null;
+
+function loadHlsLib() {
+  if (window.Hls) return Promise.resolve();
+  if (hlsLibPromise) return hlsLibPromise;
+  hlsLibPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => { hlsLibPromise = null; reject(new Error("hls-lib")); };
+    document.head.appendChild(s);
+  });
+  return hlsLibPromise;
+}
+
+function stopRadio() {
+  if (radioHls) { try { radioHls.destroy(); } catch (_) {} radioHls = null; }
+  try { radioAudio.pause(); radioAudio.removeAttribute("src"); radioAudio.load(); } catch (_) {}
+}
+
+async function doRadio(query) {
+  destroyYtPlayer();
+  stopCameras();
+  stopRadio();
+  ytQueue = []; ytPlayed = [];
+  const shouldResetSize = ui.musicPanel.classList.contains("hidden") || mediaMode !== "radio";
+  mediaMode = "radio";
+  ui.mediaIcon.textContent = "📻";
+  ui.musicTitle.textContent = query ? "راديو: " + query : "الإذاعات المحلية";
+  if (shouldResetSize) resetMediaGeometry("video");
+  ui.musicPanel.classList.remove("hidden");
+  ui.musicFrameWrap.innerHTML = '<div class="music-loading">📻 أدور لك المحطات…</div>';
+
+  try {
+    const res = await fetch("/radio?q=" + encodeURIComponent(query || ""), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const sts = data.stations || [];
+    if (!sts.length) throw new Error(data.error || "ما في محطات");
+    radioStations = sts;
+    radioTryCount = 0;
+    renderRadioUI();
+    reply(query
+      ? `📻 حاضر، بشغل لك إذاعة ${sts[0].name}`
+      : `📻 هذي الإذاعات المحلية — بشغل لك ${sts[0].name}.\nاضغط أي محطة ثانية من القائمة، أو قول «غير المحطة».`,
+      { speech: `حاضر، بشغل لك ${sts[0].name}` });
+    playRadioStation(0);
+  } catch (err) {
+    ui.musicFrameWrap.innerHTML = "";
+    ui.musicPanel.classList.add("hidden");
+    reply("⚠️ ما قدرت أييب المحطات" + (query ? ` لـ«${query}»` : "") + " — جرّب اسم ثاني أو شيك على النت.");
+  }
+}
+
+function renderRadioUI() {
+  const box = document.createElement("div");
+  box.className = "radio-box";
+  box.innerHTML = '<div class="radio-now"><span id="radioStatus">…</span><span id="radioName"></span></div><div class="radio-list" id="radioList"></div>';
+  ui.musicFrameWrap.innerHTML = "";
+  ui.musicFrameWrap.appendChild(box);
+  const list = box.querySelector("#radioList");
+  radioStations.forEach((st, i) => {
+    const b = document.createElement("button");
+    b.className = "radio-st";
+    b.textContent = "📻 " + st.name;
+    b.title = st.name;
+    b.addEventListener("click", () => { radioTryCount = 0; playRadioStation(i); });
+    list.appendChild(b);
+  });
+}
+
+function updateRadioUI(status) {
+  const n = $("radioName"), s = $("radioStatus");
+  const st = radioStations[radioIdx];
+  if (n) n.textContent = st ? st.name : "";
+  if (s) s.textContent = status;
+  document.querySelectorAll(".radio-st").forEach((b, i) => b.classList.toggle("active", i === radioIdx));
+}
+
+async function playRadioStation(i) {
+  if (!radioStations.length) return;
+  radioIdx = ((i % radioStations.length) + radioStations.length) % radioStations.length;
+  const st = radioStations[radioIdx];
+  radioTryCount++;
+  updateRadioUI("⏳ أتصل…");
+
+  if (radioHls) { try { radioHls.destroy(); } catch (_) {} radioHls = null; }
+  try { radioAudio.pause(); radioAudio.removeAttribute("src"); } catch (_) {}
+
+  const isHls = /\.m3u8/i.test(st.url);
+  if (isHls && !radioAudio.canPlayType("application/vnd.apple.mpegurl")) {
+    // بث HLS — نشغله عبر مكتبة hls.js لأن المتصفح ما يدعمه مباشرة
+    try {
+      await loadHlsLib();
+      if (mediaMode !== "radio" || radioStations[radioIdx] !== st) return;
+      if (!window.Hls || !Hls.isSupported()) throw new Error("no-hls");
+      radioHls = new Hls();
+      radioHls.loadSource(st.url);
+      radioHls.attachMedia(radioAudio);
+      radioHls.on(Hls.Events.ERROR, (ev, d) => { if (d && d.fatal) radioFail(); });
+    } catch (_) { radioFail(); return; }
+  } else {
+    radioAudio.src = st.url;
+  }
+
+  radioAudio.play()
+    .then(() => { radioTryCount = 0; updateRadioUI("🔴 مباشر"); })
+    .catch((err) => {
+      if (err && err.name === "NotAllowedError") {
+        // المتصفح مانع التشغيل التلقائي — يبا لمسة من المستخدم
+        updateRadioUI("▶️ اضغط أي محطة للتشغيل");
+        addMsg("sys", "ℹ️ المتصفح يمنع التشغيل التلقائي أول مرة — اضغط المحطة من القائمة");
+      } else if (err && err.name === "AbortError") {
+        // تبديل سريع بين المحطات — طبيعي
+      } else radioFail();
+    });
+}
+
+function radioFail() {
+  if (mediaMode !== "radio" || radioAdvancing) return;
+  radioAdvancing = true;
+  setTimeout(() => { radioAdvancing = false; }, 600);
+  if (radioTryCount >= Math.min(radioStations.length, 6)) {
+    updateRadioUI("⚠️ البث متعطل");
+    reply("⚠️ جربت كم محطة وما اشتغل البث — جرّب من يديد بعد شوي أو اطلب إذاعة ثانية.");
+    return;
+  }
+  addMsg("sys", "⏭️ هالمحطة ما اشتغلت — أجرب اللي بعدها");
+  playRadioStation(radioIdx + 1);
+}
+
 // ---------- الكاميرات (كاميرات الجهاز + USB) ----------
 let camStreams = [];
 
@@ -953,6 +1110,7 @@ async function doCamera(view) {
   }
   destroyYtPlayer();
   stopCameras();
+  stopRadio();
   ytQueue = []; ytPlayed = [];
   const shouldResetSize = ui.musicPanel.classList.contains("hidden") || mediaMode !== "camera";
   mediaMode = "camera";
@@ -1052,7 +1210,7 @@ async function askClaude(text) {
 معلومات حالية: موقع السيارة تقريبًا (خط عرض ${state.pos.lat.toFixed(3)}، خط طول ${state.pos.lng.toFixed(3)}).${state.dest ? ` الوجهة الحالية: ${state.dest.name}.` : ""}${state.weatherCache ? ` الحرارة الآن ${Math.round(state.weatherCache.temperature_2m)} درجة.` : ""}
 إذا طلب المستخدم فعلًا يمكن للتطبيق تنفيذه، أضف في نهاية ردك سطرًا منفصلًا بهذا الشكل بالضبط:
 [CMD]{"action":"navigate","query":"اسم المكان"}
-الأفعال المتاحة: navigate (الذهاب لمكان)، music (تشغيل أغنية، مع query)، video (عرض فيلم أو فيديو أو أي محتوى مرئي، مع query)، news (أخبار مباشرة)، camera (عرض كاميرا الجهاز، مع view: front أو rear أو 360)، stop_music (إيقاف أي تشغيل أو عرض)، fullscreen (ملء الشاشة)، unfullscreen (تصغير العرض)، drive (بدء القيادة الذاتية)، stop (إيقافها)، weather، traffic، cancel_route.
+الأفعال المتاحة: navigate (الذهاب لمكان)، music (تشغيل أغنية، مع query)، video (عرض فيلم أو فيديو أو أي محتوى مرئي، مع query)، news (أخبار مباشرة)، camera (عرض كاميرا الجهاز، مع view: front أو rear أو 360)، radio (تشغيل إذاعة، مع query اختياري باسم المحطة — بدونه يعرض الإذاعات الإماراتية)، next_station (المحطة التالية)، stop_music (إيقاف أي تشغيل أو عرض)، fullscreen (ملء الشاشة)، unfullscreen (تصغير العرض)، drive (بدء القيادة الذاتية)، stop (إيقافها)، weather، traffic، cancel_route.
 لا تدّعِ أنك تتحكم بالسيارة الحقيقية — القيادة الذاتية هنا محاكاة على الخريطة.`;
 
   try {
@@ -1106,6 +1264,8 @@ function runClaudeCmd(cmd) {
     case "video": doVideo(cmd.query || "مقاطع منوعة"); break;
     case "news": doVideo("أخبار بث مباشر", { live: true }); break;
     case "camera": doCamera(cmd.view === "front" ? "front" : cmd.view === "360" ? "360" : "rear"); break;
+    case "radio": doRadio(cmd.query || ""); break;
+    case "next_station": if (mediaMode === "radio" && radioStations.length) { radioTryCount = 0; playRadioStation(radioIdx + 1); } break;
     case "fullscreen": mediaFullscreen(true); break;
     case "unfullscreen": mediaFullscreen(false); break;
     case "stop_music": stopMusic(); break;

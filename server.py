@@ -19,6 +19,19 @@ HOST = "0.0.0.0" if "PORT" in os.environ else "127.0.0.1"
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 ALLOWED_VOICES = {"ar-AE-HamdanNeural", "ar-AE-FatimaNeural"}
+
+# إذاعات إماراتية حقيقية — روابط بث مجرّبة (تحقق منها 2026-07-24)
+CURATED_STATIONS = [
+    {"name": "إمارات FM", "url": "https://admn-radio-cdn-lb.starzplayarabia.com/out/v1/admn_radio_enc/emarat_fm/emarat_fm_hls_nd/index.m3u8"},
+    {"name": "القرآن الكريم — الشارقة", "url": "https://l3.itworkscdn.net/smcquranlive/quranradiolive/icecast.audio"},
+    {"name": "أبوظبي FM", "url": "https://admn-radio-cdn-lb.starzplayarabia.com/out/v1/admn_radio_enc/abudhabi_fm/abudhabi_fm_hls_nd/index.m3u8"},
+    {"name": "إذاعة الشارقة", "url": "https://svs.itworkscdn.net/sharjahradiolive/sharjahradio/playlist.m3u8"},
+    {"name": "أبوظبي كلاسيك FM", "url": "https://admn-radio-cdn-lb.starzplayarabia.com/out/v1/admn_radio_enc/classic_fm/classic_fm_hls_nd/index.m3u8"},
+    {"name": "ستار FM", "url": "https://admn-radio-cdn-lb.starzplayarabia.com/out/v1/admn_radio_enc/star_fm/star_fm_hls_nd/index.m3u8"},
+    {"name": "Pulse 95 — الشارقة (إنجليزي)", "url": "https://svs.itworkscdn.net/pulselive/pulseradio/playlist.m3u8"},
+    {"name": "TAG 91.1 (هندي)", "url": "https://cast4.servcast.net/proxy/v81radioworldwide/live"},
+    {"name": "City 1016 (هندي)", "url": "https://n07.radiojar.com/gmwyu8xdrxquv"},
+]
 _tts_cache = {}  # (voice, text) -> mp3 bytes — يسرّع الجمل المتكررة
 
 
@@ -43,7 +56,53 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith("/tts?"):
             self.handle_tts()
             return
+        if self.path.startswith("/radio"):
+            self.handle_radio()
+            return
         super().do_GET()
+
+    def handle_radio(self):
+        # بدون q: القائمة الإماراتية المضمونة — مع q: بحث بالاسم (المضمونة أولًا ثم Radio Browser عالميًا)
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        q = qs.get("q", [""])[0].strip()
+        stations = []
+        error = None
+
+        if not q:
+            stations = list(CURATED_STATIONS)
+        else:
+            ql = q.lower()
+            stations = [s for s in CURATED_STATIONS if ql in s["name"].lower()]
+            for host in ("de1.api.radio-browser.info", "fi1.api.radio-browser.info", "at1.api.radio-browser.info"):
+                try:
+                    params = {"name": q, "hidebroken": "true", "order": "votes", "reverse": "true", "limit": "25"}
+                    url = "https://" + host + "/json/stations/search?" + urllib.parse.urlencode(params)
+                    req = urllib.request.Request(url, headers={"User-Agent": "BYD-Car-Assistant/1.0"})
+                    data = json.loads(urllib.request.urlopen(req, timeout=10).read().decode("utf-8", "ignore"))
+                    seen = {s["name"].lower() for s in stations}
+                    for s in data:
+                        surl = (s.get("url_resolved") or s.get("url") or "").strip()
+                        name = (s.get("name") or "").strip()
+                        # التطبيق https — بث http يمنعه المتصفح (HLS مدعوم عبر hls.js في الواجهة)
+                        if not surl.startswith("https://"):
+                            continue
+                        key = name.lower()
+                        if not name or key in seen or "exclusiv" in key:
+                            continue
+                        seen.add(key)
+                        stations.append({"name": name, "url": surl})
+                        if len(stations) >= 20:
+                            break
+                    break
+                except Exception as e:
+                    error = str(e)
+
+        body = json.dumps({"stations": stations[:20], "error": None if stations else error}, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_tts(self):
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
