@@ -33,6 +33,7 @@ CURATED_STATIONS = [
     {"name": "City 1016 (هندي)", "url": "https://n07.radiojar.com/gmwyu8xdrxquv"},
 ]
 _tts_cache = {}  # (voice, text) -> mp3 bytes — يسرّع الجمل المتكررة
+_gemini_model = {"name": None}  # آخر موديل Gemini اشتغل — يُجرب أولًا
 
 
 async def _synth(text, voice):
@@ -72,21 +73,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         gem_key = os.environ.get("FREE_AI_KEY", "").strip()
         if gem_key:
-            try:
-                body = json.dumps({
-                    "model": os.environ.get("FREE_AI_MODEL", "gemini-2.0-flash"),
-                    "messages": [{"role": "system", "content": system}] + messages,
-                }).encode("utf-8")
-                req = urllib.request.Request(
-                    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                    data=body,
-                    headers={"Content-Type": "application/json",
-                             "Authorization": "Bearer " + gem_key},
-                )
-                data = json.loads(urllib.request.urlopen(req, timeout=45).read().decode("utf-8", "ignore"))
-                text = data["choices"][0]["message"]["content"]
-            except Exception as e:
-                error = "gemini: " + str(e)
+            # أسماء موديلات Gemini تتغير مع الوقت — نجرب المتاح ونثبت على اللي يشتغل
+            cands = []
+            if _gemini_model["name"]:
+                cands.append(_gemini_model["name"])
+            env_model = os.environ.get("FREE_AI_MODEL", "").strip()
+            if env_model:
+                cands.append(env_model)
+            cands += ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash-lite"]
+            tried = set()
+            for m in cands:
+                if m in tried:
+                    continue
+                tried.add(m)
+                try:
+                    body = json.dumps({
+                        "model": m,
+                        "messages": [{"role": "system", "content": system}] + messages,
+                    }).encode("utf-8")
+                    req = urllib.request.Request(
+                        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                        data=body,
+                        headers={"Content-Type": "application/json",
+                                 "Authorization": "Bearer " + gem_key},
+                    )
+                    data = json.loads(urllib.request.urlopen(req, timeout=45).read().decode("utf-8", "ignore"))
+                    text = data["choices"][0]["message"]["content"]
+                    _gemini_model["name"] = m
+                    break
+                except Exception as e:
+                    error = "gemini(" + m + "): " + str(e)
 
         if text is None:
             try:
