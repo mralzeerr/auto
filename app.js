@@ -1274,22 +1274,35 @@ function doCarInfo() {
   reply(carModel().info, { speech: carModel().infoSpeech });
 }
 
-// ---------- Claude AI ----------
-async function askClaude(text) {
-  if (!state.settings.apiKey) {
-    return reply("ما فهمت طلبك من أوامري المدمجة 🤔\nجرّب: «وصلني…»، «شحال الجو؟»، «شغل أغنية…»\nوإذا تبا الذكاء الاصطناعي الكامل (يرد على أي سؤال) ضيف مفتاح Claude API من الإعدادات ⚙️");
-  }
-
-  addMsg("sys", "🤖 أفكر…");
-  state.chatHistory.push({ role: "user", content: text });
-  if (state.chatHistory.length > 12) state.chatHistory = state.chatHistory.slice(-12);
-
-  const sysPrompt = `أنت مساعد ذكي داخل سيارة BYD ${carModel().name} (Leopard ${state.settings.carModel}). ترد دائمًا باللهجة الإماراتية بأسلوب ودود ومختصر (جمل قصيرة لأن الرد يُنطق صوتيًا للسايق). استخدم كلمات إماراتية مثل: هلا والله، شحالك، وايد، زين، تبا، الحين، عساك، طريج.
+// ---------- الذكاء الاصطناعي: Claude (بمفتاح) أو مجاني (بدون مفتاح) ----------
+function buildSysPrompt() {
+  return `أنت مساعد ذكي داخل سيارة BYD ${carModel().name} (Leopard ${state.settings.carModel}). ترد دائمًا باللهجة الإماراتية بأسلوب ودود ومختصر (جمل قصيرة لأن الرد يُنطق صوتيًا للسايق). استخدم كلمات إماراتية مثل: هلا والله، شحالك، وايد، زين، تبا، الحين، عساك، طريج.
 معلومات حالية: موقع السيارة تقريبًا (خط عرض ${state.pos.lat.toFixed(3)}، خط طول ${state.pos.lng.toFixed(3)}).${state.dest ? ` الوجهة الحالية: ${state.dest.name}.` : ""}${state.weatherCache ? ` الحرارة الآن ${Math.round(state.weatherCache.temperature_2m)} درجة.` : ""}
 إذا طلب المستخدم فعلًا يمكن للتطبيق تنفيذه، أضف في نهاية ردك سطرًا منفصلًا بهذا الشكل بالضبط:
 [CMD]{"action":"navigate","query":"اسم المكان"}
 الأفعال المتاحة: navigate (الذهاب لمكان)، music (تشغيل أغنية، مع query)، video (عرض فيلم أو فيديو أو أي محتوى مرئي، مع query)، news (أخبار مباشرة)، camera (عرض كاميرا الجهاز، مع view: front أو rear أو 360)، radio (تشغيل إذاعة، مع query اختياري باسم المحطة — بدونه يعرض الإذاعات الإماراتية)، next_station (المحطة التالية)، social (فتح منصة تواصل، مع app: whatsapp أو telegram أو tiktok أو x أو snapchat — بدون app يفتح مركز التواصل)، stop_music (إيقاف أي تشغيل أو عرض)، fullscreen (ملء الشاشة)، unfullscreen (تصغير العرض)، drive (بدء القيادة الذاتية)، stop (إيقافها)، weather، traffic، cancel_route.
 لا تدّعِ أنك تتحكم بالسيارة الحقيقية — القيادة الذاتية هنا محاكاة على الخريطة.`;
+}
+
+// معالجة رد الذكاء: استخراج الأمر [CMD] وتنفيذه ثم نطق الرد
+function processAiAnswer(answer) {
+  let cmd = null;
+  const cmdMatch = answer.match(/\[CMD\](\{.*\})/s);
+  if (cmdMatch) {
+    try { cmd = JSON.parse(cmdMatch[1]); } catch (_) {}
+    answer = answer.replace(/\[CMD\]\{.*\}/s, "").trim();
+  }
+  if (answer) reply(answer);
+  if (cmd) runClaudeCmd(cmd);
+}
+
+async function askClaude(text) {
+  addMsg("sys", "🤖 أفكر…");
+  state.chatHistory.push({ role: "user", content: text });
+  if (state.chatHistory.length > 12) state.chatHistory = state.chatHistory.slice(-12);
+
+  // بدون مفتاح Claude → الذكاء المجاني عبر السيرفر
+  if (!state.settings.apiKey) return askFreeAI();
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1303,7 +1316,7 @@ async function askClaude(text) {
       body: JSON.stringify({
         model: "claude-opus-4-8",
         max_tokens: 1024,
-        system: sysPrompt,
+        system: buildSysPrompt(),
         messages: state.chatHistory,
       }),
     });
@@ -1316,22 +1329,30 @@ async function askClaude(text) {
     }
 
     const data = await res.json();
-    let answer = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+    const answer = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
     state.chatHistory.push({ role: "assistant", content: answer });
-
-    // استخراج الأمر إن وجد
-    let cmd = null;
-    const cmdMatch = answer.match(/\[CMD\](\{.*\})/s);
-    if (cmdMatch) {
-      try { cmd = JSON.parse(cmdMatch[1]); } catch (_) {}
-      answer = answer.replace(/\[CMD\]\{.*\}/s, "").trim();
-    }
-
-    if (answer) reply(answer);
-    if (cmd) runClaudeCmd(cmd);
+    processAiAnswer(answer);
   } catch (err) {
     state.chatHistory.pop();
     reply("⚠️ ما قدرت أوصل لخدمة الذكاء الاصطناعي. تأكد من النت.");
+  }
+}
+
+async function askFreeAI() {
+  try {
+    const res = await fetch("/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system: buildSysPrompt(), messages: state.chatHistory }),
+    });
+    const data = await res.json();
+    if (!data.text) throw new Error(data.error || "ما في رد");
+    const answer = data.text.trim();
+    state.chatHistory.push({ role: "assistant", content: answer });
+    processAiAnswer(answer);
+  } catch (err) {
+    state.chatHistory.pop();
+    reply("⚠️ الذكاء المجاني مشغول حالياً — عيد سؤالك بعد لحظات 🤖\nوللجودة الأعلى والثبات، تقدر تضيف مفتاح Claude من الإعدادات ⚙️ (اختياري).");
   }
 }
 

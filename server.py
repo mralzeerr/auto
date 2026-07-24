@@ -49,6 +49,69 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
+    def do_POST(self):
+        if self.path == "/ai":
+            self.handle_ai()
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def handle_ai(self):
+        # ذكاء اصطناعي مجاني عندما لا يضع المستخدم مفتاح Claude:
+        # 1) Gemini بمفتاح خدمة واحد للتطبيق كله (FREE_AI_KEY في بيئة الاستضافة — مجاني بدون بطاقة)
+        # 2) احتياط بدون أي مفتاح (Pollinations) — يقبل النصوص القصيرة فقط
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except Exception:
+            payload = {}
+        system = payload.get("system") or ""
+        messages = payload.get("messages") or []
+        text = None
+        error = None
+
+        gem_key = os.environ.get("FREE_AI_KEY", "").strip()
+        if gem_key:
+            try:
+                body = json.dumps({
+                    "model": os.environ.get("FREE_AI_MODEL", "gemini-2.0-flash"),
+                    "messages": [{"role": "system", "content": system}] + messages,
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                    data=body,
+                    headers={"Content-Type": "application/json",
+                             "Authorization": "Bearer " + gem_key},
+                )
+                data = json.loads(urllib.request.urlopen(req, timeout=45).read().decode("utf-8", "ignore"))
+                text = data["choices"][0]["message"]["content"]
+            except Exception as e:
+                error = "gemini: " + str(e)
+
+        if text is None:
+            try:
+                body = json.dumps({
+                    "model": "openai",
+                    "referrer": "byd-car-assistant",
+                    "messages": [{"role": "system", "content": system[:400]}] + messages[-4:],
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    "https://text.pollinations.ai/openai",
+                    data=body,
+                    headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+                )
+                data = json.loads(urllib.request.urlopen(req, timeout=45).read().decode("utf-8", "ignore"))
+                text = data["choices"][0]["message"]["content"]
+            except Exception as e:
+                error = (error + " | " if error else "") + "free: " + str(e)
+
+        body = json.dumps({"text": text, "error": None if text else error}, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         if self.path.startswith("/yt?"):
             self.handle_yt()
