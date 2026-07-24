@@ -296,6 +296,15 @@ async function handleInput(text) {
     return reply("تم، رجعت العرض للحجم العادي.");
   }
 
+  // ---- التواصل الاجتماعي ----
+  if (/(واتساب|الواتساب|واتس|تيليجرام|التيليجرام|تلغرام|تلجرام|تيك توك|تكتوك|تويتر|سناب|التواصل|السوشل|السوشيال)/.test(t) && /(وقف|أوقف|اوقف|سكر|اقفل|اغلق|أغلق)/.test(t)) return stopMusic();
+  if (/(واتساب|الواتساب|واتس اب|الواتس|وتساب)/.test(t)) return openSocial("whatsapp");
+  if (/(تيليجرام|التيليجرام|تلغرام|التلغرام|تلجرام|التلجرام|تيلجرام)/.test(t)) return openSocial("telegram");
+  if (/(تيك توك|التيك توك|تكتوك|التكتوك)/.test(t)) return openSocial("tiktok");
+  if (/(تويتر|التويتر|منصة اكس|منصة إكس|^اكس$|^إكس$|افتح اكس|افتح إكس|شغل اكس|شغل إكس)/.test(t)) return openSocial("x");
+  if (/(سناب شات|السناب|سناب)/.test(t)) return openSocial("snapchat");
+  if (/(التواصل|مركز التواصل|السوشل|السوشيال|وسائل التواصل)/.test(t)) return doSocialHub();
+
   // ---- الراديو والإذاعات ----
   if (/(راديو|الراديو|إذاعة|اذاعة|الإذاعة|الاذاعة|إذاعات|اذاعات|الإذاعات|الاذاعات|محطة|المحطة|محطات)/.test(t)) {
     if (/(وقف|أوقف|اوقف|سكر|اقفل)/.test(t)) return stopMusic();
@@ -672,7 +681,7 @@ function loadYtApi() {
   return ytApiPromise;
 }
 
-const MEDIA_ICONS = { music: "🎵", video: "🎬", news: "📺", radio: "📻" };
+const MEDIA_ICONS = { music: "🎵", video: "🎬", news: "📺", radio: "📻", social: "📱" };
 let mediaMode = "music";
 
 async function doMusic(query, quiet) {
@@ -838,7 +847,7 @@ function stopMusic() {
   mediaFullscreen(false);
   ui.musicFrameWrap.innerHTML = "";
   ui.musicPanel.classList.add("hidden");
-  reply(mediaMode === "music" ? "⏹ وقفت لك الموسيقى." : mediaMode === "camera" ? "⏹ سكرت لك الكاميرا." : mediaMode === "radio" ? "⏹ وقفت لك الراديو." : "⏹ وقفت لك العرض.");
+  reply(mediaMode === "music" ? "⏹ وقفت لك الموسيقى." : mediaMode === "camera" ? "⏹ سكرت لك الكاميرا." : mediaMode === "radio" ? "⏹ وقفت لك الراديو." : mediaMode === "social" ? "⏹ سكرت لك نافذة التواصل." : "⏹ وقفت لك العرض.");
 }
 ui.closeMusicBtn.addEventListener("click", stopMusic);
 $("openYtBtn").addEventListener("click", () => {
@@ -1077,6 +1086,60 @@ function radioFail() {
   playRadioStation(radioIdx + 1);
 }
 
+// ---------- التواصل الاجتماعي ----------
+// المنصات تمنع التضمين داخل الصفحة (X-Frame-Options) — نفتحها بنوافذ مستقلة
+// والمتصفح يحفظ جلسة الدخول، فتسجل مرة وحدة بس
+const SOCIAL_APPS = {
+  whatsapp: { name: "واتساب", glyph: "💬", url: "https://web.whatsapp.com", cls: "s-wa", hint: "أول مرة: امسح رمز QR من واتساب تلفونك" },
+  telegram: { name: "تيليجرام", glyph: "✈️", url: "https://web.telegram.org/a/", cls: "s-tg", hint: "أول مرة: سجل برقمك أو رمز QR" },
+  tiktok: { name: "تيك توك", glyph: "🎵", url: "https://www.tiktok.com", cls: "s-tt", hint: "تصفح بدون دخول أو سجل حسابك" },
+  x: { name: "إكس", glyph: "𝕏", url: "https://x.com", cls: "s-x", hint: "سجل دخولك أول مرة بس" },
+  snapchat: { name: "سناب شات", glyph: "👻", url: "https://web.snapchat.com", cls: "s-sc", hint: "سجل دخولك أول مرة بس" },
+};
+
+function openSocial(key, fromClick) {
+  const app = SOCIAL_APPS[key];
+  if (!app) return;
+  const w = Math.min(520, Math.round(screen.width * 0.42));
+  const h = Math.min(880, screen.height - 80);
+  const win = window.open(app.url, "byd_social_" + key,
+    `width=${w},height=${h},left=${Math.max(0, screen.width - w - 30)},top=30`);
+  if (win) {
+    reply(`📱 فتحت لك ${app.name} بنافذة جنب التطبيق.` + (fromClick ? "" : `\n(${app.hint})`), { speech: `فتحت لك ${app.name}` });
+  } else {
+    // المتصفح منع النافذة المنبثقة (الأوامر الصوتية ما تعتبر لمسة) — نعرض المركز ليضغط البطاقة
+    doSocialHub(true);
+    addMsg("sys", `ℹ️ المتصفح يحتاج لمسة منك — اضغط بطاقة ${app.name}`);
+  }
+}
+
+function doSocialHub(quiet) {
+  destroyYtPlayer();
+  stopCameras();
+  stopRadio();
+  ytQueue = []; ytPlayed = [];
+  const shouldResetSize = ui.musicPanel.classList.contains("hidden") || mediaMode !== "social";
+  mediaMode = "social";
+  ui.mediaIcon.textContent = "📱";
+  ui.musicTitle.textContent = "التواصل";
+  if (shouldResetSize) resetMediaGeometry("video");
+  ui.musicPanel.classList.remove("hidden");
+
+  const grid = document.createElement("div");
+  grid.className = "social-grid";
+  Object.keys(SOCIAL_APPS).forEach((key) => {
+    const app = SOCIAL_APPS[key];
+    const card = document.createElement("button");
+    card.className = "social-card " + app.cls;
+    card.innerHTML = `<span class="social-glyph">${app.glyph}</span><span class="social-name">${app.name}</span><span class="social-hint">${app.hint}</span>`;
+    card.addEventListener("click", () => openSocial(key, true));
+    grid.appendChild(card);
+  });
+  ui.musicFrameWrap.innerHTML = "";
+  ui.musicFrameWrap.appendChild(grid);
+  if (!quiet) reply("📱 هذا مركز التواصل — اضغط أي منصة وبفتحها لك بنافذة جنب التطبيق. تسجل دخولك مرة وحدة بس والمتصفح يحفظها.", { speech: "هذا مركز التواصل، اضغط المنصة اللي تباها" });
+}
+
 // ---------- الكاميرات (كاميرات الجهاز + USB) ----------
 let camStreams = [];
 
@@ -1210,7 +1273,7 @@ async function askClaude(text) {
 معلومات حالية: موقع السيارة تقريبًا (خط عرض ${state.pos.lat.toFixed(3)}، خط طول ${state.pos.lng.toFixed(3)}).${state.dest ? ` الوجهة الحالية: ${state.dest.name}.` : ""}${state.weatherCache ? ` الحرارة الآن ${Math.round(state.weatherCache.temperature_2m)} درجة.` : ""}
 إذا طلب المستخدم فعلًا يمكن للتطبيق تنفيذه، أضف في نهاية ردك سطرًا منفصلًا بهذا الشكل بالضبط:
 [CMD]{"action":"navigate","query":"اسم المكان"}
-الأفعال المتاحة: navigate (الذهاب لمكان)، music (تشغيل أغنية، مع query)، video (عرض فيلم أو فيديو أو أي محتوى مرئي، مع query)، news (أخبار مباشرة)، camera (عرض كاميرا الجهاز، مع view: front أو rear أو 360)، radio (تشغيل إذاعة، مع query اختياري باسم المحطة — بدونه يعرض الإذاعات الإماراتية)، next_station (المحطة التالية)، stop_music (إيقاف أي تشغيل أو عرض)، fullscreen (ملء الشاشة)، unfullscreen (تصغير العرض)، drive (بدء القيادة الذاتية)، stop (إيقافها)، weather، traffic، cancel_route.
+الأفعال المتاحة: navigate (الذهاب لمكان)، music (تشغيل أغنية، مع query)، video (عرض فيلم أو فيديو أو أي محتوى مرئي، مع query)، news (أخبار مباشرة)، camera (عرض كاميرا الجهاز، مع view: front أو rear أو 360)، radio (تشغيل إذاعة، مع query اختياري باسم المحطة — بدونه يعرض الإذاعات الإماراتية)، next_station (المحطة التالية)، social (فتح منصة تواصل، مع app: whatsapp أو telegram أو tiktok أو x أو snapchat — بدون app يفتح مركز التواصل)، stop_music (إيقاف أي تشغيل أو عرض)، fullscreen (ملء الشاشة)، unfullscreen (تصغير العرض)، drive (بدء القيادة الذاتية)، stop (إيقافها)، weather، traffic، cancel_route.
 لا تدّعِ أنك تتحكم بالسيارة الحقيقية — القيادة الذاتية هنا محاكاة على الخريطة.`;
 
   try {
@@ -1266,6 +1329,7 @@ function runClaudeCmd(cmd) {
     case "camera": doCamera(cmd.view === "front" ? "front" : cmd.view === "360" ? "360" : "rear"); break;
     case "radio": doRadio(cmd.query || ""); break;
     case "next_station": if (mediaMode === "radio" && radioStations.length) { radioTryCount = 0; playRadioStation(radioIdx + 1); } break;
+    case "social": cmd.app && SOCIAL_APPS[cmd.app] ? openSocial(cmd.app) : doSocialHub(); break;
     case "fullscreen": mediaFullscreen(true); break;
     case "unfullscreen": mediaFullscreen(false); break;
     case "stop_music": stopMusic(); break;

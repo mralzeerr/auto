@@ -231,6 +231,45 @@ html, body {
 #musicFrameWrap iframe, #musicFrameWrap > div { width: 100%; height: 100%; border: 0; display: block; }
 .music-loading { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
 
+/* مركز التواصل الاجتماعي */
+.social-grid {
+  width: 100%; height: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
+  align-content: center;
+  scrollbar-width: thin;
+}
+.social-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 130px;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  font-family: inherit;
+  color: #fff;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.social-card:hover { transform: translateY(-3px) scale(1.02); }
+.social-card:active { transform: scale(0.97); }
+.social-glyph { font-size: 40px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }
+.social-name { font-size: 17px; font-weight: 800; }
+.social-hint { font-size: 10.5px; opacity: 0.85; padding: 0 10px; text-align: center; line-height: 1.5; }
+.s-wa { background: linear-gradient(145deg, #1fa855, #128c7e); box-shadow: 0 6px 22px rgba(37,211,102,0.35); }
+.s-tg { background: linear-gradient(145deg, #37aee2, #1e96c8); box-shadow: 0 6px 22px rgba(42,171,238,0.35); }
+.s-tt { background: linear-gradient(145deg, #2b2b35, #0e0e12); box-shadow: 0 6px 22px rgba(255,0,80,0.35); border: 1px solid rgba(255,0,80,0.4); }
+.s-tt .social-glyph { text-shadow: 2px 2px 0 rgba(255,0,80,0.7), -2px -2px 0 rgba(0,242,234,0.7); }
+.s-x { background: linear-gradient(145deg, #23282d, #000); box-shadow: 0 6px 22px rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); }
+.s-sc { background: linear-gradient(145deg, #fffc00, #f5d800); box-shadow: 0 6px 22px rgba(255,252,0,0.3); color: #1a1a1a; }
+
 /* الراديو */
 .radio-box { width: 100%; height: 100%; display: flex; flex-direction: column; }
 .radio-now {
