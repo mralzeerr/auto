@@ -26,8 +26,52 @@ const state = {
     autoListen: localStorage.getItem("byd_auto_listen") === "1",
     tts: localStorage.getItem("byd_tts") !== "0",
     voice: localStorage.getItem("byd_voice") || "ar-AE-HamdanNeural",
+    carModel: localStorage.getItem("byd_model") || "8",
   },
 };
+
+// ---------- موديلات السيارة ----------
+const CAR_MODELS = {
+  "5": {
+    name: "ليبرد 5", speech: "ليبرد خمسة",
+    info: `🚙 BYD ليبرد 5 (Leopard 5 / Bao 5)
+• دفع رباعي هجين DMO — قوة ~677 حصان
+• تسارع 0-100: حوالي 4.8 ثانية
+• مدى كهربائي يصل ~125 كم ومدى إجمالي ~1200 كم
+• نظام تعليق DiSus-P الذكي
+وحش الطرق الوعرة ما شاء الله! 🐆`,
+    infoSpeech: "سيارتك بي واي دي ليبرد خمسة، دفع رباعي هجين بقوة تقارب ستمئة وسبعين حصان، ومدى إجمالي يوصل ألف ومئتين كيلومتر. وحش الطرق الوعرة ما شاء الله",
+  },
+  "7": {
+    name: "ليبرد 7", speech: "ليبرد سبعة",
+    info: `🚙 BYD ليبرد 7 (Leopard 7)
+• دفع رباعي هجين بقوة تتجاوز 600 حصان
+• تسارع 0-100: حوالي 4.5 ثانية
+• مدى إجمالي يتجاوز 1000 كم
+• تعليق DiSus الذكي ونظام مساعدة القيادة "عين الإله" (God's Eye)
+سيارة فخمة ما شاء الله! 🐆`,
+    infoSpeech: "سيارتك بي واي دي ليبرد سبعة، دفع رباعي هجين بقوة فوق ستمئة حصان، ومدى إجمالي فوق ألف كيلومتر. سيارة فخمة ما شاء الله",
+  },
+  "8": {
+    name: "ليبرد 8", speech: "ليبرد ثمانية",
+    info: `🚙 BYD ليبرد 8 (Leopard 8 / Bao 8)
+• دفع رباعي هجين DMO — قوة تتجاوز 750 حصان
+• تسارع 0-100: حوالي 4.8 ثانية
+• مدى كهربائي يصل ~100 كم ومدى إجمالي +1000 كم
+• نظام تعليق DiSus-P الذكي
+• نظام مساعدة القيادة "عين الإله" (God's Eye)
+سيارة فخمة ما شاء الله! 🐆`,
+    infoSpeech: "سيارتك بي واي دي ليبرد ثمانية، دفع رباعي هجين بقوة فوق سبعمئة وخمسين حصان، ومدى إجمالي فوق ألف كيلومتر. سيارة فخمة ما شاء الله",
+  },
+};
+
+function carModel() { return CAR_MODELS[state.settings.carModel] || CAR_MODELS["8"]; }
+
+function applyCarModel() {
+  const label = document.getElementById("carModelLabel");
+  if (label) label.textContent = carModel().name;
+  document.title = "BYD " + carModel().name;
+}
 
 // ---------- عناصر الواجهة ----------
 const $ = (id) => document.getElementById(id);
@@ -47,7 +91,7 @@ const ui = {
   confirmText: $("confirmText"), confirmYes: $("confirmYes"), confirmNo: $("confirmNo"),
   settingsModal: $("settingsModal"), settingsBtn: $("settingsBtn"),
   apiKeyInput: $("apiKeyInput"), autoListenChk: $("autoListenChk"), ttsChk: $("ttsChk"),
-  voiceSel: $("voiceSel"),
+  voiceSel: $("voiceSel"), carModelSel: $("carModelSel"),
   settingsSave: $("settingsSave"), settingsClose: $("settingsClose"),
 };
 
@@ -290,7 +334,7 @@ async function handleInput(text) {
   if (/(أين أنا|اين انا|وين انا|وين أنا|ويني|موقعي|مكاني)/.test(t)) return doWhereAmI();
 
   // ---- معلومات السيارة ----
-  if (/(معلومات|مواصفات).*(السيارة|سيارتي|ليبرد)/.test(t) || /^سيارتي$/.test(t)) return doCarInfo();
+  if (/(معلومات|مواصفات).*(السيارة|سيارتي|ليبرد|ليوبارد)/.test(t) || /^سيارتي$/.test(t)) return doCarInfo();
 
   // ---- الوقت ----
   if (/(كم الساعة|الوقت|التاريخ)/.test(t)) {
@@ -317,7 +361,7 @@ async function handleInput(text) {
 
   // ---- التحية ----
   if (/^(مرحبا|مرحبًا|هلا|أهلا|اهلا|السلام عليكم|صباح الخير|مساء الخير|شحالك|شخبارك|هاي)/.test(t)) {
-    return reply("هلا والله! شحالك؟ آنا مساعد سيارتك ليبرد 8. قول لي: «وصلني…»، «شحال الجو؟»، «شغل أغنية…»، أو اسألني اللي تباه 🚙");
+    return reply(`هلا والله! شحالك؟ آنا مساعد سيارتك ${carModel().name}. قول لي: «وصلني…»، «شحال الجو؟»، «شغل أغنية…»، أو اسألني اللي تباه 🚙`);
   }
 
   // ---- غير ذلك → Claude AI ----
@@ -991,13 +1035,7 @@ async function doWhereAmI() {
 
 // ---------- معلومات السيارة ----------
 function doCarInfo() {
-  reply(`🚙 BYD ليبرد 8 (Leopard 8 / Bao 8)
-• دفع رباعي هجين DMO — قوة تتجاوز 750 حصان
-• تسارع 0-100: حوالي 4.8 ثانية
-• مدى كهربائي يصل ~100 كم ومدى إجمالي +1000 كم
-• نظام تعليق DiSus-P الذكي
-• نظام مساعدة القيادة "عين الإله" (God's Eye)
-سيارة فخمة ما شاء الله! 🐆`, { speech: "سيارتك بي واي دي ليبرد ثمانية، دفع رباعي هجين بقوة فوق سبعمئة وخمسين حصان، ومدى إجمالي فوق ألف كيلومتر. سيارة فخمة ما شاء الله" });
+  reply(carModel().info, { speech: carModel().infoSpeech });
 }
 
 // ---------- Claude AI ----------
@@ -1010,7 +1048,7 @@ async function askClaude(text) {
   state.chatHistory.push({ role: "user", content: text });
   if (state.chatHistory.length > 12) state.chatHistory = state.chatHistory.slice(-12);
 
-  const sysPrompt = `أنت مساعد ذكي داخل سيارة BYD ليبرد 8 (Leopard 8). ترد دائمًا باللهجة الإماراتية بأسلوب ودود ومختصر (جمل قصيرة لأن الرد يُنطق صوتيًا للسايق). استخدم كلمات إماراتية مثل: هلا والله، شحالك، وايد، زين، تبا، الحين، عساك، طريج.
+  const sysPrompt = `أنت مساعد ذكي داخل سيارة BYD ${carModel().name} (Leopard ${state.settings.carModel}). ترد دائمًا باللهجة الإماراتية بأسلوب ودود ومختصر (جمل قصيرة لأن الرد يُنطق صوتيًا للسايق). استخدم كلمات إماراتية مثل: هلا والله، شحالك، وايد، زين، تبا، الحين، عساك، طريج.
 معلومات حالية: موقع السيارة تقريبًا (خط عرض ${state.pos.lat.toFixed(3)}، خط طول ${state.pos.lng.toFixed(3)}).${state.dest ? ` الوجهة الحالية: ${state.dest.name}.` : ""}${state.weatherCache ? ` الحرارة الآن ${Math.round(state.weatherCache.temperature_2m)} درجة.` : ""}
 إذا طلب المستخدم فعلًا يمكن للتطبيق تنفيذه، أضف في نهاية ردك سطرًا منفصلًا بهذا الشكل بالضبط:
 [CMD]{"action":"navigate","query":"اسم المكان"}
@@ -1103,6 +1141,7 @@ ui.settingsBtn.addEventListener("click", () => {
   ui.autoListenChk.checked = state.settings.autoListen;
   ui.ttsChk.checked = state.settings.tts;
   if (ui.voiceSel) ui.voiceSel.value = state.settings.voice;
+  if (ui.carModelSel) ui.carModelSel.value = state.settings.carModel;
   ui.settingsModal.classList.remove("hidden");
 });
 ui.settingsSave.addEventListener("click", () => {
@@ -1110,13 +1149,20 @@ ui.settingsSave.addEventListener("click", () => {
   state.settings.autoListen = ui.autoListenChk.checked;
   state.settings.tts = ui.ttsChk.checked;
   const prevVoice = state.settings.voice;
+  const prevModel = state.settings.carModel;
   if (ui.voiceSel) state.settings.voice = ui.voiceSel.value;
+  if (ui.carModelSel) state.settings.carModel = ui.carModelSel.value;
   localStorage.setItem("byd_api_key", state.settings.apiKey);
   localStorage.setItem("byd_auto_listen", state.settings.autoListen ? "1" : "0");
   localStorage.setItem("byd_tts", state.settings.tts ? "1" : "0");
   localStorage.setItem("byd_voice", state.settings.voice);
+  localStorage.setItem("byd_model", state.settings.carModel);
+  applyCarModel();
   ui.settingsModal.classList.add("hidden");
   addMsg("sys", "✅ حفظت الإعدادات." + (state.settings.apiKey ? " الذكاء الاصطناعي الكامل شغال 🤖" : ""));
+  if (state.settings.carModel !== prevModel) {
+    reply(`🚙 تم! سيارتك الحين ${carModel().name} — كل شي بيتكلم على أساسها.`, { speech: `تم، سيارتك الحين ${carModel().speech}` });
+  }
   if (state.settings.tts && state.settings.voice !== prevVoice) {
     speak(state.settings.voice === "ar-AE-FatimaNeural"
       ? "هلا، أنا فاطمة. من الحين بكلمك بهالصوت"
@@ -1126,7 +1172,8 @@ ui.settingsSave.addEventListener("click", () => {
 ui.settingsClose.addEventListener("click", () => ui.settingsModal.classList.add("hidden"));
 
 // ---------- الترحيب ----------
+applyCarModel();
 setTimeout(() => {
-  addMsg("bot", "👋 هلا والله! حياك في مساعد BYD ليبرد 8\n🎤 اضغط المايك وقول مثلًا: «وصلني المطار» أو «شحال الجو؟» أو «شغل أغنية»");
-  speak("هلا والله، حياك في مساعد بي واي دي ليبرد ثمانية. اضغط المايك وقول لي وين تبا تروح، أو اسألني اللي تباه");
+  addMsg("bot", `👋 هلا والله! حياك في مساعد BYD ${carModel().name}\n🎤 اضغط المايك وقول مثلًا: «وصلني المطار» أو «شحال الجو؟» أو «شغل أغنية»`);
+  speak(`هلا والله، حياك في مساعد بي واي دي ${carModel().speech}. اضغط المايك وقول لي وين تبا تروح، أو اسألني اللي تباه`);
 }, 800);

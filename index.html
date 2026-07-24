@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>مساعد BYD ليبرد 8</title>
+<title>BYD</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -16,7 +16,7 @@
 <header id="topbar">
   <div class="brand">
     <span class="logo">BYD</span>
-    <span class="model">ليبرد 8</span>
+    <span class="model" id="carModelLabel">ليبرد 8</span>
   </div>
   <div id="clock">--:--</div>
   <div class="top-actions">
@@ -103,6 +103,12 @@
     <label class="set-label">مفتاح Claude API (اختياري — للذكاء الاصطناعي الكامل):</label>
     <input id="apiKeyInput" type="password" placeholder="sk-ant-...">
     <div class="modal-hint">بدون المفتاح يعمل التطبيق بالأوامر المدمجة (ملاحة، طقس، موسيقى…). مع المفتاح يجيب المساعد على أي سؤال. احصل عليه من console.anthropic.com</div>
+    <label class="set-label">🚙 موديل سيارتك:</label>
+    <select id="carModelSel">
+      <option value="5">BYD ليبرد 5</option>
+      <option value="7">BYD ليبرد 7</option>
+      <option value="8" selected>BYD ليبرد 8</option>
+    </select>
     <label class="set-label">🗣️ صوت المساعد (إماراتي طبيعي):</label>
     <select id="voiceSel">
       <option value="ar-AE-HamdanNeural">حمدان — صوت رجالي إماراتي</option>
@@ -119,6 +125,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
