@@ -27,13 +27,14 @@ const state = {
     tts: localStorage.getItem("byd_tts") !== "0",
     voice: localStorage.getItem("byd_voice") || "ar-AE-HamdanNeural",
     carModel: localStorage.getItem("byd_model") || "8",
+    customCar: localStorage.getItem("byd_custom_car") || "",
   },
 };
 
-// ---------- موديلات السيارة ----------
+// ---------- كتالوج السيارات (لأي سيارة بشاشة أندرويد) ----------
 const CAR_MODELS = {
   "5": {
-    name: "ليبرد 5", speech: "ليبرد خمسة",
+    name: "BYD ليبرد 5", speech: "بي واي دي ليبرد خمسة",
     info: `🚙 BYD ليبرد 5 (Leopard 5 / Bao 5)
 • دفع رباعي هجين DMO — قوة ~677 حصان
 • تسارع 0-100: حوالي 4.8 ثانية
@@ -43,7 +44,7 @@ const CAR_MODELS = {
     infoSpeech: "سيارتك بي واي دي ليبرد خمسة، دفع رباعي هجين بقوة تقارب ستمئة وسبعين حصان، ومدى إجمالي يوصل ألف ومئتين كيلومتر. وحش الطرق الوعرة ما شاء الله",
   },
   "7": {
-    name: "ليبرد 7", speech: "ليبرد سبعة",
+    name: "BYD ليبرد 7", speech: "بي واي دي ليبرد سبعة",
     info: `🚙 BYD ليبرد 7 (Leopard 7)
 • دفع رباعي هجين بقوة تتجاوز 600 حصان
 • تسارع 0-100: حوالي 4.5 ثانية
@@ -53,7 +54,7 @@ const CAR_MODELS = {
     infoSpeech: "سيارتك بي واي دي ليبرد سبعة، دفع رباعي هجين بقوة فوق ستمئة حصان، ومدى إجمالي فوق ألف كيلومتر. سيارة فخمة ما شاء الله",
   },
   "8": {
-    name: "ليبرد 8", speech: "ليبرد ثمانية",
+    name: "BYD ليبرد 8", speech: "بي واي دي ليبرد ثمانية",
     info: `🚙 BYD ليبرد 8 (Leopard 8 / Bao 8)
 • دفع رباعي هجين DMO — قوة تتجاوز 750 حصان
 • تسارع 0-100: حوالي 4.8 ثانية
@@ -63,14 +64,29 @@ const CAR_MODELS = {
 سيارة فخمة ما شاء الله! 🐆`,
     infoSpeech: "سيارتك بي واي دي ليبرد ثمانية، دفع رباعي هجين بقوة فوق سبعمئة وخمسين حصان، ومدى إجمالي فوق ألف كيلومتر. سيارة فخمة ما شاء الله",
   },
+  "seal": { name: "BYD سيل", speech: "بي واي دي سيل" },
+  "han": { name: "BYD هان", speech: "بي واي دي هان" },
+  "landcruiser": { name: "تويوتا لاند كروزر", speech: "تويوتا لاند كروزر" },
+  "patrol": { name: "نيسان باترول", speech: "نيسان باترول" },
+  "lx": { name: "لكزس LX", speech: "لكزس إل إكس" },
+  "yukon": { name: "جي إم سي يوكن", speech: "جي إم سي يوكن" },
+  "tahoe": { name: "شيفروليه تاهو", speech: "شيفروليه تاهو" },
+  "tank300": { name: "تانك 300", speech: "تانك ثلاثمية" },
+  "t2": { name: "جيتور T2", speech: "جيتور تي تو" },
 };
 
-function carModel() { return CAR_MODELS[state.settings.carModel] || CAR_MODELS["8"]; }
+function carModel() {
+  if (state.settings.carModel === "custom") {
+    const n = (state.settings.customCar || "").trim() || "سيارتي";
+    return { name: n, speech: n };
+  }
+  return CAR_MODELS[state.settings.carModel] || CAR_MODELS["8"];
+}
 
 function applyCarModel() {
   const label = document.getElementById("carModelLabel");
   if (label) label.textContent = carModel().name;
-  document.title = "BYD " + carModel().name;
+  document.title = "ALZEERR";
 }
 
 // ---------- عناصر الواجهة ----------
@@ -91,7 +107,7 @@ const ui = {
   confirmText: $("confirmText"), confirmYes: $("confirmYes"), confirmNo: $("confirmNo"),
   settingsModal: $("settingsModal"), settingsBtn: $("settingsBtn"),
   apiKeyInput: $("apiKeyInput"), autoListenChk: $("autoListenChk"), ttsChk: $("ttsChk"),
-  voiceSel: $("voiceSel"), carModelSel: $("carModelSel"),
+  voiceSel: $("voiceSel"), carModelSel: $("carModelSel"), customCarInput: $("customCarInput"),
   settingsSave: $("settingsSave"), settingsClose: $("settingsClose"),
 };
 
@@ -1271,12 +1287,15 @@ async function doWhereAmI() {
 
 // ---------- معلومات السيارة ----------
 function doCarInfo() {
-  reply(carModel().info, { speech: carModel().infoSpeech });
+  const c = carModel();
+  if (c.info) return reply(c.info, { speech: c.infoSpeech });
+  // سيارة ما عندنا مواصفاتها محفوظة → الذكاء الاصطناعي يجيبها
+  return askClaude(`عطني أهم مواصفات سيارتي ${c.name} باختصار (القوة، التسارع، المدى أو استهلاك الوقود، وأبرز المميزات)`);
 }
 
 // ---------- الذكاء الاصطناعي: Claude (بمفتاح) أو مجاني (بدون مفتاح) ----------
 function buildSysPrompt() {
-  return `أنت مساعد ذكي داخل سيارة BYD ${carModel().name} (Leopard ${state.settings.carModel}). ترد دائمًا باللهجة الإماراتية بأسلوب ودود ومختصر (جمل قصيرة لأن الرد يُنطق صوتيًا للسايق). استخدم كلمات إماراتية مثل: هلا والله، شحالك، وايد، زين، تبا، الحين، عساك، طريج.
+  return `أنت «ALZEERR» — مساعد ذكي داخل سيارة ${carModel().name}. ترد دائمًا باللهجة الإماراتية بأسلوب ودود ومختصر (جمل قصيرة لأن الرد يُنطق صوتيًا للسايق). استخدم كلمات إماراتية مثل: هلا والله، شحالك، وايد، زين، تبا، الحين، عساك، طريج.
 معلومات حالية: موقع السيارة تقريبًا (خط عرض ${state.pos.lat.toFixed(3)}، خط طول ${state.pos.lng.toFixed(3)}).${state.dest ? ` الوجهة الحالية: ${state.dest.name}.` : ""}${state.weatherCache ? ` الحرارة الآن ${Math.round(state.weatherCache.temperature_2m)} درجة.` : ""}
 إذا طلب المستخدم فعلًا يمكن للتطبيق تنفيذه، أضف في نهاية ردك سطرًا منفصلًا بهذا الشكل بالضبط:
 [CMD]{"action":"navigate","query":"اسم المكان"}
@@ -1401,27 +1420,46 @@ ui.settingsBtn.addEventListener("click", () => {
   ui.autoListenChk.checked = state.settings.autoListen;
   ui.ttsChk.checked = state.settings.tts;
   if (ui.voiceSel) ui.voiceSel.value = state.settings.voice;
-  if (ui.carModelSel) ui.carModelSel.value = state.settings.carModel;
+  if (ui.carModelSel) {
+    const knownCar = CAR_MODELS[state.settings.carModel] || state.settings.carModel === "custom";
+    ui.carModelSel.value = knownCar ? state.settings.carModel : "8";
+    ui.customCarInput.value = state.settings.customCar;
+    ui.customCarInput.classList.toggle("hidden", ui.carModelSel.value !== "custom");
+  }
   ui.settingsModal.classList.remove("hidden");
 });
+
+// إظهار خانة الإدخال اليدوي عند اختيار «سيارة أخرى»
+if (ui.carModelSel) {
+  ui.carModelSel.addEventListener("change", () => {
+    ui.customCarInput.classList.toggle("hidden", ui.carModelSel.value !== "custom");
+    if (ui.carModelSel.value === "custom") ui.customCarInput.focus();
+  });
+}
 ui.settingsSave.addEventListener("click", () => {
   state.settings.apiKey = ui.apiKeyInput.value.trim();
   state.settings.autoListen = ui.autoListenChk.checked;
   state.settings.tts = ui.ttsChk.checked;
   const prevVoice = state.settings.voice;
-  const prevModel = state.settings.carModel;
+  const prevCarName = carModel().name;
   if (ui.voiceSel) state.settings.voice = ui.voiceSel.value;
-  if (ui.carModelSel) state.settings.carModel = ui.carModelSel.value;
+  if (ui.carModelSel) {
+    state.settings.carModel = ui.carModelSel.value;
+    if (state.settings.carModel === "custom") {
+      state.settings.customCar = (ui.customCarInput.value || "").trim();
+    }
+  }
   localStorage.setItem("byd_api_key", state.settings.apiKey);
   localStorage.setItem("byd_auto_listen", state.settings.autoListen ? "1" : "0");
   localStorage.setItem("byd_tts", state.settings.tts ? "1" : "0");
   localStorage.setItem("byd_voice", state.settings.voice);
   localStorage.setItem("byd_model", state.settings.carModel);
+  localStorage.setItem("byd_custom_car", state.settings.customCar);
   applyCarModel();
   ui.settingsModal.classList.add("hidden");
-  addMsg("sys", "✅ حفظت الإعدادات." + (state.settings.apiKey ? " الذكاء الاصطناعي الكامل شغال 🤖" : ""));
-  if (state.settings.carModel !== prevModel) {
-    reply(`🚙 تم! سيارتك الحين ${carModel().name} — كل شي بيتكلم على أساسها.`, { speech: `تم، سيارتك الحين ${carModel().speech}` });
+  addMsg("sys", "✅ حفظت الإعدادات." + (state.settings.apiKey ? " ذكاء Claude شغال 🤖" : ""));
+  if (carModel().name !== prevCarName) {
+    reply(`🚗 تم! سيارتك الحين ${carModel().name} — كل شي بيتكلم على أساسها.`, { speech: `تم، سيارتك الحين ${carModel().speech}` });
   }
   if (state.settings.tts && state.settings.voice !== prevVoice) {
     speak(state.settings.voice === "ar-AE-FatimaNeural"
@@ -1434,6 +1472,6 @@ ui.settingsClose.addEventListener("click", () => ui.settingsModal.classList.add(
 // ---------- الترحيب ----------
 applyCarModel();
 setTimeout(() => {
-  addMsg("bot", `👋 هلا والله! حياك في مساعد BYD ${carModel().name}\n🎤 اضغط المايك وقول مثلًا: «وصلني المطار» أو «شحال الجو؟» أو «شغل أغنية»`);
-  speak(`هلا والله، حياك في مساعد بي واي دي ${carModel().speech}. اضغط المايك وقول لي وين تبا تروح، أو اسألني اللي تباه`);
+  addMsg("bot", `👋 هلا والله! حياك في ALZEERR — مساعد سيارتك ${carModel().name}\n🎤 اضغط المايك وقول مثلًا: «وصلني المطار» أو «شحال الجو؟» أو «شغل أغنية»\n⚙️ غيّر نوع سيارتك من الإعدادات`);
+  speak(`هلا والله، حياك في الزير، مساعد سيارتك ${carModel().speech}. اضغط المايك وقول لي وين تبا تروح، أو اسألني اللي تباه`);
 }, 800);

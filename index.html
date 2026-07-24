@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>BYD</title>
+<title>ALZEERR</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -15,8 +15,8 @@
 <!-- الشريط العلوي -->
 <header id="topbar">
   <div class="brand">
-    <span class="logo">BYD</span>
-    <span class="model" id="carModelLabel">ليبرد 8</span>
+    <span class="logo">ALZEERR</span>
+    <span class="model" id="carModelLabel">سيارتي</span>
   </div>
   <div id="clock">--:--</div>
   <div class="top-actions">
@@ -105,12 +105,23 @@
     <label class="set-label">مفتاح Claude API (اختياري — للذكاء الاصطناعي الكامل):</label>
     <input id="apiKeyInput" type="password" placeholder="sk-ant-...">
     <div class="modal-hint">بدون المفتاح يشتغل ذكاء اصطناعي مجاني تلقائيًا ✨ — ومع مفتاح Claude تحصل على أعلى جودة وأدق فهم للهجة. احصل عليه من console.anthropic.com</div>
-    <label class="set-label">🚙 موديل سيارتك:</label>
+    <label class="set-label">🚗 سيارتك:</label>
     <select id="carModelSel">
       <option value="5">BYD ليبرد 5</option>
       <option value="7">BYD ليبرد 7</option>
       <option value="8" selected>BYD ليبرد 8</option>
+      <option value="seal">BYD سيل</option>
+      <option value="han">BYD هان</option>
+      <option value="landcruiser">تويوتا لاند كروزر</option>
+      <option value="patrol">نيسان باترول</option>
+      <option value="lx">لكزس LX</option>
+      <option value="yukon">جي إم سي يوكن</option>
+      <option value="tahoe">شيفروليه تاهو</option>
+      <option value="tank300">تانك 300</option>
+      <option value="t2">جيتور T2</option>
+      <option value="custom">🖊️ سيارة أخرى — أدخل اسمها بنفسك</option>
     </select>
+    <input id="customCarInput" type="text" class="hidden" placeholder="اكتب اسم سيارتك… مثال: تويوتا كامري 2024">
     <label class="set-label">🗣️ صوت المساعد (إماراتي طبيعي):</label>
     <select id="voiceSel">
       <option value="ar-AE-HamdanNeural">حمدان — صوت رجالي إماراتي</option>
@@ -127,6 +138,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
